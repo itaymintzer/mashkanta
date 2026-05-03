@@ -1,0 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #06080f; color: #dce5f5; font-family: 'Heebo', sans-serif; direction: rtl; min-height: 100vh; }
+input, textarea, button { font-family: 'Heebo', sans-serif; }
