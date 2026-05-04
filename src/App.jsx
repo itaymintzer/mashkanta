@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "./supabase";
 
 // ─── CONSTANTS ───
 const MORTGAGE = 1647000;
@@ -89,7 +90,7 @@ const DOC_GROUPS = [
   }
 ];
 
-// ─── HOOK ───
+// ─── UTILS ───
 function useLocalStorage(key, initial) {
   const [val, setVal] = useState(() => {
     try {
@@ -103,7 +104,6 @@ function useLocalStorage(key, initial) {
   return [val, setVal];
 }
 
-// ─── UTILS ───
 function calcMonthly(bank) {
   const fp = (bank.fixedPct || 33) / 100;
   const fa = MORTGAGE * fp, pa = MORTGAGE * (1 - fp);
@@ -169,6 +169,15 @@ const THEMES = {
   },
 };
 
+const PAYMENT_MILESTONES = [
+  { label: "חתימת חוזה", days: 0, amount: 0, color: "#4f9eff", desc: "מועד חתימת החוזה" },
+  { label: "מקדמה 10%", days: 0, amount: 317500, color: "#f6a623", desc: "₪317,500 — בעת חתימה" },
+  { label: "אישור עקרוני בנק", days: 14, amount: 0, color: "#2dd4a0", desc: "קבל אישור בנק בכתב" },
+  { label: "מס רכישה", days: 45, amount: 53500, color: "#f87171", desc: "~₪53,500 — תוך 60 יום מחתימה" },
+  { label: "יתרת תשלום + משכנתא", days: 75, amount: PRICE - 317500, color: "#a78bfa", desc: `₪${(PRICE - 317500).toLocaleString("he-IL")} — לסגירה` },
+  { label: "קבלת מפתחות", days: 90, amount: 0, color: "#2dd4a0", desc: "סיום העסקה" },
+];
+
 // ─── TASK ITEM ───
 function TaskItem({ task, done, onToggle, T }) {
   return (
@@ -206,36 +215,192 @@ function TaskItem({ task, done, onToggle, T }) {
   );
 }
 
-// ─── PAYMENT MILESTONES ───
-const PAYMENT_MILESTONES = [
-  { label: "חתימת חוזה", days: 0, amount: 0, color: "#4f9eff", desc: "מועד חתימת החוזה" },
-  { label: "מקדמה 10%", days: 0, amount: 317500, color: "#f6a623", desc: `₪${(317500).toLocaleString("he-IL")} — בעת חתימה` },
-  { label: "אישור עקרוני בנק", days: 14, amount: 0, color: "#2dd4a0", desc: "קבל אישור בנק בכתב" },
-  { label: "מס רכישה", days: 45, amount: 53500, color: "#f87171", desc: "~₪53,500 — תוך 60 יום מחתימה" },
-  { label: "יתרת תשלום + משכנתא", days: 75, amount: PRICE - 317500, color: "#a78bfa", desc: `₪${(PRICE - 317500).toLocaleString("he-IL")} — לסגירה` },
-  { label: "קבלת מפתחות", days: 90, amount: 0, color: "#2dd4a0", desc: "סיום העסקה" },
-];
+// ─── AUTH SCREEN ───
+function AuthScreen({ T }) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function sendLink() {
+    if (!email) return;
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    setLoading(false);
+    if (error) { setError(error.message); return; }
+    setSent(true);
+  }
+
+  const inputStyle = {
+    background: T.inputBg, border: `1px solid ${T.border}`, borderRadius: 8,
+    padding: "10px 14px", color: T.text, fontFamily: "Heebo, sans-serif",
+    fontSize: ".85rem", width: "100%", outline: "none",
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: T.bg, display: "flex",
+      alignItems: "center", justifyContent: "center",
+      fontFamily: "Heebo, sans-serif", direction: "rtl", padding: 20,
+    }}>
+      <div style={{
+        background: T.cardBg, border: `1px solid ${T.border}`,
+        borderRadius: 20, padding: 32, width: "100%", maxWidth: 380,
+      }}>
+        <div style={{
+          fontSize: "1.5rem", fontWeight: 900, textAlign: "center", marginBottom: 6,
+          background: "linear-gradient(120deg,#60a5fa,#34d399)",
+          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+        }}>
+          מנהל משכנתא
+        </div>
+        <div style={{ fontSize: ".75rem", color: T.textMuted, textAlign: "center", marginBottom: 28 }}>
+          כניסה לחשבון
+        </div>
+
+        {sent ? (
+          <div style={{
+            background: "#2dd4a018", border: "1px solid #2dd4a044",
+            borderRadius: 12, padding: 20, textAlign: "center",
+          }}>
+            <div style={{ fontSize: "1.8rem", marginBottom: 10 }}>✉</div>
+            <div style={{ fontSize: ".85rem", fontWeight: 700, color: "#2dd4a0", marginBottom: 6 }}>
+              קישור נשלח!
+            </div>
+            <div style={{ fontSize: ".75rem", color: T.textMuted }}>
+              בדוק את תיבת הדואר שלך ולחץ על הקישור כדי להיכנס
+            </div>
+            <button
+              onClick={() => setSent(false)}
+              style={{
+                marginTop: 16, background: "none", border: "none",
+                color: T.textMuted, fontSize: ".72rem", cursor: "pointer",
+                fontFamily: "Heebo, sans-serif",
+              }}
+            >
+              שלח שוב
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: ".68rem", color: T.textMuted, marginBottom: 5 }}>כתובת אימייל</div>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && sendLink()}
+                style={inputStyle}
+                dir="ltr"
+              />
+            </div>
+            {error && <div style={{ fontSize: ".7rem", color: "#f87171", marginBottom: 10 }}>{error}</div>}
+            <button
+              onClick={sendLink}
+              disabled={loading}
+              style={{
+                background: "linear-gradient(120deg,#4f9eff,#2dd4a0)",
+                color: "#fff", border: "none", borderRadius: 10,
+                padding: "11px 16px", fontFamily: "Heebo, sans-serif",
+                fontSize: ".85rem", fontWeight: 700, cursor: "pointer",
+                width: "100%", opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading ? "שולח..." : "שלח קישור כניסה"}
+            </button>
+            <div style={{ fontSize: ".65rem", color: T.textMuted, textAlign: "center", marginTop: 14 }}>
+              קישור ישלח לאימייל שלך — ללא סיסמה
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── MAIN ───
 export default function MortgageManager() {
   const [theme, setTheme] = useLocalStorage("mm_theme", "dark");
   const T = THEMES[theme];
 
-  const [tab, setTab] = useLocalStorage("mm_tab", "timeline");
-  const [done, setDone] = useLocalStorage("mm_done", {});
-  const [docsDone, setDocsDone] = useLocalStorage("mm_docsDone", {});
-  const [banks, setBanks] = useLocalStorage("mm_banks", []);
-  const [notes, setNotes] = useLocalStorage("mm_notes", "");
-  const [contacts, setContacts] = useLocalStorage("mm_contacts", "");
-  const [signingDate, setSigningDate] = useLocalStorage("mm_signingDate", "");
+  // Auth state
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
+  // App data
+  const [tab, setTab] = useState("timeline");
+  const [done, setDone] = useState({});
+  const [docsDone, setDocsDone] = useState({});
+  const [banks, setBanks] = useState([]);
+  const [notes, setNotes] = useState("");
+  const [contacts, setContacts] = useState("");
+  const [signingDate, setSigningDate] = useState("");
+
+  // UI state
   const [bankForm, setBankForm] = useState({ name: "", fixed: "", prime: "", fixedPct: "33", fee: "", note: "" });
   const [jsonInput, setJsonInput] = useState("");
   const [jsonError, setJsonError] = useState("");
   const [expandedBank, setExpandedBank] = useState(null);
   const [notesSaved, setNotesSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [eligForm, setEligForm] = useState({ married: true, children: 2, militaryYears: 2, reserveDays: 90, area: "center" });
+
+  const dataLoaded = useRef(false);
+  const saveTimer = useRef(null);
+
+  // ── Auth listener ──
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // ── Load data on login ──
+  useEffect(() => {
+    if (!session) return;
+    dataLoaded.current = false;
+    supabase
+      .from("mortgage_data")
+      .select("data")
+      .eq("user_id", session.user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.data) {
+          const d = data.data;
+          if (d.done) setDone(d.done);
+          if (d.docsDone) setDocsDone(d.docsDone);
+          if (d.banks) setBanks(d.banks);
+          if (d.notes !== undefined) setNotes(d.notes);
+          if (d.contacts !== undefined) setContacts(d.contacts);
+          if (d.signingDate !== undefined) setSigningDate(d.signingDate);
+          if (d.theme) setTheme(d.theme);
+        }
+        dataLoaded.current = true;
+      });
+  }, [session]);
+
+  // ── Debounced save on data change ──
+  useEffect(() => {
+    if (!session || !dataLoaded.current) return;
+    clearTimeout(saveTimer.current);
+    setSaving(true);
+    saveTimer.current = setTimeout(async () => {
+      await supabase.from("mortgage_data").upsert({
+        user_id: session.user.id,
+        data: { done, docsDone, banks, notes, contacts, signingDate, theme },
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+      setSaving(false);
+    }, 1500);
+  }, [done, docsDone, banks, notes, contacts, signingDate, theme]);
 
   const allTasks = PHASES.flatMap(p => p.tasks);
   const totalTasks = allTasks.length;
@@ -288,7 +453,7 @@ export default function MortgageManager() {
     if (mil >= 2) pts += 2; else if (mil >= 1) pts += 1;
     pts += Math.min(Math.floor((parseInt(reserveDays) || 0) / 30) * 0.5, 4);
     const eligible = pts >= 7;
-    let base = pts >= 15 ? 200000 : pts >= 10 ? 150000 : pts >= 7 ? 100000 : 0;
+    const base = pts >= 15 ? 200000 : pts >= 10 ? 150000 : pts >= 7 ? 100000 : 0;
     const mult = area === "a" ? 2.2 : area === "b" ? 1.5 : 1;
     const cap = area === "a" ? 450000 : area === "b" ? 250000 : 200000;
     return { pts, eligible, grant: Math.min(Math.round(base * mult), cap), cap };
@@ -325,6 +490,22 @@ export default function MortgageManager() {
     });
   }
 
+  // ── Loading screen ──
+  if (authLoading) {
+    return (
+      <div style={{
+        minHeight: "100vh", background: T.bg, display: "flex",
+        alignItems: "center", justifyContent: "center",
+        fontFamily: "Heebo, sans-serif", color: T.textMuted,
+      }}>
+        טוען...
+      </div>
+    );
+  }
+
+  // ── Auth screen ──
+  if (!session) return <AuthScreen T={T} />;
+
   const S = {
     card: { background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, marginBottom: 10 },
     label: { fontSize: ".63rem", color: T.textMuted },
@@ -355,7 +536,7 @@ export default function MortgageManager() {
 
       {/* HEADER */}
       <div style={{ textAlign: "center", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
           <div style={{
             fontSize: "1.4rem", fontWeight: 900,
             background: "linear-gradient(120deg,#60a5fa,#34d399)",
@@ -363,19 +544,34 @@ export default function MortgageManager() {
           }}>
             מנהל משכנתא — יפו
           </div>
-          <button
-            onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-            style={{
-              background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: 20,
-              padding: "4px 10px", cursor: "pointer", fontSize: ".72rem", color: T.text,
-              fontFamily: "Heebo, sans-serif", transition: "all .2s", flexShrink: 0,
-            }}
-          >
-            {theme === "dark" ? "☀ בהיר" : "● כהה"}
-          </button>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button
+              onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
+              style={{
+                background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: 20,
+                padding: "4px 10px", cursor: "pointer", fontSize: ".72rem", color: T.text,
+                fontFamily: "Heebo, sans-serif", transition: "all .2s",
+              }}
+            >
+              {theme === "dark" ? "☀ בהיר" : "● כהה"}
+            </button>
+            {saving && (
+              <span style={{ fontSize: ".62rem", color: T.textMuted }}>שומר...</span>
+            )}
+            <button
+              onClick={() => supabase.auth.signOut()}
+              style={{
+                background: "none", border: `1px solid ${T.border}`, borderRadius: 20,
+                padding: "4px 10px", cursor: "pointer", fontSize: ".72rem", color: T.textMuted,
+                fontFamily: "Heebo, sans-serif",
+              }}
+            >
+              יציאה
+            </button>
+          </div>
         </div>
-        <div style={{ fontSize: ".75rem", color: T.textMuted, marginBottom: 12 }}>
-          3,175,000 ₪ | מעקב תהליך + השוואת בנקים
+        <div style={{ fontSize: ".7rem", color: T.textMuted, marginBottom: 12 }}>
+          {session.user.email} · 3,175,000 ₪
         </div>
 
         {/* SUMMARY ROW */}
@@ -458,7 +654,6 @@ export default function MortgageManager() {
       {/* ── BANKS TAB ── */}
       {tab === "banks" && (
         <div>
-          {/* COMPARISON CHART */}
           {banks.length > 1 && (
             <div style={S.card}>
               <div style={{ fontSize: ".78rem", fontWeight: 700, color: "#4f9eff", marginBottom: 12 }}>
@@ -467,20 +662,15 @@ export default function MortgageManager() {
               {(() => {
                 const max = Math.max(...banks.map(b => calcMonthly(b)));
                 return banks
-                  .slice()
-                  .sort((a, b) => calcMonthly(a) - calcMonthly(b))
+                  .slice().sort((a, b) => calcMonthly(a) - calcMonthly(b))
                   .map(bank => {
                     const monthly = calcMonthly(bank);
                     const isBest = bestBank?.id === bank.id;
                     return (
                       <div key={bank.id} style={{ marginBottom: 10 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                          <span style={{ fontSize: ".72rem", color: T.text }}>
-                            {bank.name}{isBest ? " ★" : ""}
-                          </span>
-                          <span style={{ fontSize: ".72rem", fontWeight: 700, color: isBest ? "#2dd4a0" : T.text }}>
-                            ₪{fmt(monthly)}
-                          </span>
+                          <span style={{ fontSize: ".72rem", color: T.text }}>{bank.name}{isBest ? " ★" : ""}</span>
+                          <span style={{ fontSize: ".72rem", fontWeight: 700, color: isBest ? "#2dd4a0" : T.text }}>₪{fmt(monthly)}</span>
                         </div>
                         <div style={{ background: T.progressBg, borderRadius: 6, height: 10, overflow: "hidden" }}>
                           <div style={{
@@ -496,7 +686,6 @@ export default function MortgageManager() {
             </div>
           )}
 
-          {/* ADD FORM */}
           <div style={S.card}>
             <div style={{ fontSize: ".78rem", fontWeight: 700, color: "#4f9eff", marginBottom: 10 }}>הוסף הצעת בנק</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
@@ -523,7 +712,6 @@ export default function MortgageManager() {
             <button onClick={addBank} style={S.btn()}>הוסף הצעה</button>
           </div>
 
-          {/* JSON IMPORT */}
           <div style={S.card}>
             <div style={{ fontSize: ".78rem", fontWeight: 700, color: "#a78bfa", marginBottom: 6 }}>ייבוא JSON</div>
             <div style={{ fontSize: ".65rem", color: T.textMuted, marginBottom: 6 }}>
@@ -540,7 +728,6 @@ export default function MortgageManager() {
             <button onClick={importJSON} style={S.btn("#a78bfa")}>ייבא</button>
           </div>
 
-          {/* BANK CARDS */}
           {banks.length === 0 ? (
             <div style={{ textAlign: "center", color: T.textMuted, fontSize: ".78rem", padding: 24 }}>
               עדיין אין הצעות — הוסף הצעה ידנית או ייבא JSON
@@ -602,7 +789,6 @@ export default function MortgageManager() {
                   </button>
                 </div>
 
-                {/* AMORTIZATION TABLE */}
                 {isExpanded && (
                   <div style={{ marginTop: 12, overflowX: "auto" }}>
                     <div style={{ fontSize: ".68rem", color: T.textMuted, marginBottom: 6 }}>לוח סילוקין — סיכום שנתי</div>
@@ -710,8 +896,10 @@ export default function MortgageManager() {
                 style={{ ...S.input, resize: "vertical", lineHeight: 1.6 }}
               />
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                <button onClick={() => { setNotesSaved(true); setTimeout(() => setNotesSaved(false), 2000); }}
-                  style={{ ...S.btn(color), width: "auto", padding: "7px 16px" }}>
+                <button
+                  onClick={() => { setNotesSaved(true); setTimeout(() => setNotesSaved(false), 2000); }}
+                  style={{ ...S.btn(color), width: "auto", padding: "7px 16px" }}
+                >
                   שמור
                 </button>
                 {notesSaved && <span style={{ fontSize: ".68rem", color: "#2dd4a0" }}>נשמר</span>}
@@ -724,7 +912,6 @@ export default function MortgageManager() {
       {/* ── TOOLS TAB ── */}
       {tab === "tools" && (
         <div>
-          {/* PAYMENT TIMELINE */}
           <div style={S.card}>
             <div style={{ fontSize: ".78rem", fontWeight: 700, color: "#f6a623", marginBottom: 10 }}>לוח תשלומים</div>
             <div style={{ marginBottom: 14 }}>
@@ -771,7 +958,6 @@ export default function MortgageManager() {
             </div>
           </div>
 
-          {/* ELIGIBILITY CALCULATOR */}
           <div style={S.card}>
             <div style={{ fontSize: ".78rem", fontWeight: 700, color: "#2dd4a0", marginBottom: 4 }}>
               מחשבון זכאות למשכנתא
@@ -836,8 +1022,7 @@ export default function MortgageManager() {
                   {eligible && (
                     <>
                       <div style={{ fontSize: ".78rem", marginBottom: 4 }}>
-                        הלוואת זכאות משוערת:{" "}
-                        <b style={{ color: "#2dd4a0" }}>₪{fmt(grant)}</b>
+                        הלוואת זכאות משוערת: <b style={{ color: "#2dd4a0" }}>₪{fmt(grant)}</b>
                       </div>
                       <div style={{ fontSize: ".63rem", color: T.textMuted }}>
                         בריבית מסובסדת | מקסימום באזור זה: ₪{fmt(cap)}
@@ -849,7 +1034,6 @@ export default function MortgageManager() {
             })()}
           </div>
 
-          {/* EXPORT */}
           <div style={S.card}>
             <div style={{ fontSize: ".78rem", fontWeight: 700, color: "#a78bfa", marginBottom: 6 }}>ייצוא סיכום</div>
             <div style={{ fontSize: ".65rem", color: T.textMuted, marginBottom: 10 }}>
